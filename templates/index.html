@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>🛠️ Chat Suporte Técnico</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <script src="static/script.js"></script>
+    <div class="chat-container">
+        <header>
+            <h2>🛠️ Suporte Técnico</h2>
+        </header>
+
+        <main id="chat" class="chat-box"></main>
+
+        <footer class="input-area">
+            <input type="text" id="mensagem" placeholder="Digite seu problema..." autocomplete="off">
+            <button onclick="enviar()">Enviar</button>
+        </footer>
+    </div>    
+</body>
+</html>
