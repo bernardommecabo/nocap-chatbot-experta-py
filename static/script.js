@@ -15,15 +15,23 @@ function enviar() {
     adicionarMensagem("usuario", "Você: " + mensagem);
     input.value = "";
 
+    console.log("Enviando para o backend:", mensagem);
+
     fetch("/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mensagem })
     })
     .then(res => res.json())
-    .then(data => adicionarMensagem("bot", "Bot: " + data.resposta));
+    .then(data => {
+        console.log("Resposta do backend:", data);
+        adicionarMensagem("bot", "Bot: " + data.resposta);
+    })
+    .catch(err => console.error("Erro ao enviar mensagem:", err));
 }
 
-document.getElementById("mensagem").addEventListener("keypress", function(e) {
-    if (e.key === "Enter") enviar();
+document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("mensagem").addEventListener("keypress", function(e) {
+        if (e.key === "Enter") enviar();
+    });
 });

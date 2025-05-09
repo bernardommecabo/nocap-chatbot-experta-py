@@ -6,7 +6,6 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <script src="static/script.js"></script>
     <div class="chat-container">
         <header>
             <h2>🛠️ Suporte Técnico</h2>
@@ -19,5 +18,7 @@
             <button onclick="enviar()">Enviar</button>
         </footer>
     </div>    
+    
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
