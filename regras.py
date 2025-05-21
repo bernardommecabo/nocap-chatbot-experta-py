@@ -1,197 +1,212 @@
-from experta import *
+import re
 
-class Problema(Fact):
-    texto = Field(str, mandatory=True)
-    pass
+# nesta classe estão presentes os vetores com as palavras utilizadas para fazer o diagnóstico, esta classe é utilizada na classe sistema_especialista para conseguirmos comparar
+# a entrada do usuário com qual regra que será acionada. tudo isso com o uso de expressões regulares para melhor análise das entradas do usuário.
 
-class Diagnostico(Fact):
-    categoria = Field(str, mandatory=True)
-    respostaUsuario = Field(str, mandatory=True)
-    tentativas = Field(str, default=0)
-    pass
+PALAVRAS_SAUDACOES = [
+    r"\boi\b",  # \b pra delimitar pra não pegar "estrelado" por exemplo, e o .* serve pra dizer que pode ter qualquer coisa no meio
+    r"\bol[aá]\b"
+]
 
-#Cria uma classe chamada SuporteTecnico que herda de KnowledgeEngine
-class SuporteTecnico(KnowledgeEngine):
-    def __init__(self):
-        super().__init__()
-        self.ultima_resposta = ""
+PALAVRAS_BOOT = [
+    r"\btela\b.*\bazul\b",
+    r"\berro\b.*\btela\b.*\bazul\b",
+    r"\bn[aã]o liga\b",
+    r"\bn[aã]o est[aá] ligando\b",
+    r"\bn[aã]o inicia\b",
+    r"\bn[aã]o est[aá] iniciando\b",
+    r"\bsistema operacional n[aã]o inicia\b",
+    r"\bn[aã]o entra no windows\b",
+    r"\bn[aã]o carrega\b",
+    r"\bc[oó]digo na bios\b",
+    r"\bn[aã]o salva\b.*\bbios\b",
+    r"\bdesliga do nada\b",
+    r"\bdesliga ao ligar\b",
+    r"\bdesliga\b.*\bsozinho\b",
+    r"\bliga\b.*\bdesliga\b",
+    r"\breinicia\b.*\bsozinho\b",
+    r"\bfica\b.*\bcarregando\b",
+    r"\bloop\b.*\binicializa[cç][aã]o\b"
+]
 
-    # Classifica a categoria do problema com base em palavras-chave
-    def classificar_categoria(self, texto):
-        categorias = {
-            "video/imagem": [
-                ["video", "nao exibe"],["tela", "sem imagem"],["tela", "preta"],
-                ["tela", "sem sinal"],["resolucao", "incorreta"],["tela", "distorcida"],
-                ["imagem", "esticada"],["resolucao", "errada"],["tela", "fora do padrao"]
-            ],
 
-            "falha_boot": [
-                ["placa mae", "problema"],["bios", "erro"],["sistema", "nao carrega"],
-                ["sistema operacional", "nao inicia"],["sistema", "nao inicializa"],["sistema", "nao carrega"],
-                ["windows", "falha"],["sistema", "tela azul"],["sistema", "crashou"],
-                ["sistema", "crash"],["sistema", "parou"]
-            ],
+PALAVRAS_VIDEO = [
+    r"\btela\b.*\bpreta\b",
+    r"\btela\b.*\bdistorcida\b",
+    r"\bimagem\b.*\bdistorcida\b",
+    r"\bresolu[cç][aã]o\b.*\berrada\b",
+    r"\bn[aã]o d[aá] v[ií]deo\b",
+    r"\bn[aã]o aparece\b.*\btela\b",
+    r"\bn[aã]o est[aá] aparecendo\b.*\btela\b",
+    r"\bn[aã]o mostra\b.*\btela\b",
+    r"\btela\b.*\bn[aã]o aparece\b",
+    r"\bnada\b.*\btela\b"
+]
 
-            "aquecimento/fonte": [
-                ["computador", "nao liga"],["computador", "desligou e nao liga"],["equipamento", "sem sinal de vida"],
-                ["sistema", "superaquecendo"],["sistema", "esquentando"],["equipamento", "fazendo barulho"],
-                ["sistema", "desligando"],["equipamento", "barulho estranho"],["equipamento", "barulhento"],
-                ["fonte", "com problema"],["fonte", "defeituosa"],["fonte", "cheiro queimado"],["sistema", "lento"]
-            ],
+PALAVRAS_FONTE = [
+    r"\bfalta\b.*\benergia\b",
+    r"\bn[aã]o liga\b",
+    r"\bn[aã]o est[aá] ligando\b",
+    r"\bcabo\b.*\bfor[çc]a\b",
+    r"\bfonte\b.*\bqueimada\b",
+    r"\bn[aã]o acende\b.*\bled\b",
+    r"\bcheiro\b.*\bqueimado\b",
+    r"\bbarulho\b",
+    r"\bbarulhento\b",
+    r"\besquentando\b",
+    r"\besquentando demais\b",
+    r"\bdesligou\b.*\bn[aã]o liga mais\b",
+    r"\bsistema lento\b",
+    r"\bhd\b.*\bbarulho\b"
+]
 
-            "firewall": [
-                ["firewall", "bloqueando acesso"],["acesso", "impedido pelo firewall"],
-                ["firewall", "barrando conexao"],["sistema", "acesso bloqueado"]
-            ],
-            
-            "seguranca/malware": [
-                ["navegador","lento"],["navegador","travando"],["navegador","com problema"],
-                ["virus"],["com malware"],["propaganda"],["pop up"],["site", "travando"],
-                ["ameaca","detectada"],["ameaca","bloqueada"],["ameaca","removida"],
-                ["sem protecao"],["sem antivirus"],["antivirus","desatualizado"],
-                ["programa","desconhecido"],["programa","suspeito"],["programa","malicioso"],
-                ["abrindo","sozinho"],["abrindo","sem querer"],["abrindo","sem autorizacao"]
-            ],
 
-            "sistema/software": [
-                ["faltando","dll"],["erro","dll"],["erro","sistema"],
-                ["fechou","sozinho"],["fechando","sozinho"],["travando","sozinho"],
-                ["sistema","travando"],["sistema","lento"],["sistema","com problema"],
-                ["sistema","com erro"],["sistema","com falha"],["sistema","com bug"],
-                ["sistema","lento"],["sisema","devagar"],["baixo", "desempenho"],
-                ["erro", "compatibilidade"],["erro","atualizacao"],["erro","instalacao"],
-                ["conflito","software"],["conflito","programa"],["conflito","aplicativo"]
-            ],
 
-            "rede": [["sem","internet"],["sem","conexao"],["sem","wifi"],["sem","sinal"],
-                     ["rede","desconhecida"],["rede","instavel"],["rede","lenta"],["conflito","ip"],
-                     ["ip","duplicado"],["problema","ip"],["ip","instavel"],["erro","endereco"],
-                     ["problema","modem"],["modem","desconhecido"],["roteador","nao funciona"],
-                     ["luz vermelha", "modem"],["luz","modem"],["luz","roteador"],
-            ],
+PALAVRAS_FIREWALL = [
+    r"\bfirewall\b.*\bbloqueando\b",
+    r"\bfirewall\b.*\bbarrando\b",
+    r"\bbloqueio\b.*\bfirewall\b",
+    r"\bfirewall\b.*\bimpedindo\b.*\bacesso\b",
+    r"\bfirewall\b.*\bbloqueou\b"
+]
 
-            "armazenamento": ["hd"],
 
-            "perifericos": [""],
+PALAVRAS_SEGURANCA = [
+    r"\bnavegador\b.*\blento\b",
+    r"\bnavegador\b.*\btravando\b",
+    r"\bpropaganda\b.*\bdemais\b",
+    r"\bpop.?ups?\b.*\bconstantes\b",
+    r"\bjanelas\b.*\babrindo\b.*\bsozinhas\b",
+    r"\bbrowser\b.*\bpropaganda\b",
+    r"\bp[áa]ginas\b.*\babrindo\b.*\bsozinhas\b",
+    r"\binternet\b.*\bcheia\b.*\bpopups\b",
+    r"\bvírus\b",
+    r"\bmalware\b",
+    r"\bamea[çc]a\b.*\bdetectada\b",
+    r"\bprote[cç][aã]o\b.*\bativa\b",
+    r"\bantiv[ií]rus\b.*\bdesligado\b",
+    r"\bseguran[çc]a\b.*\bdesativada\b",
+    r"\bsoftware\b.*\bestranho\b.*\biniciar\b",
+    r"\binicializa[cç][aã]o\b.*\bindesejada\b",
+    r"\bprogramas?\b.*\babrindo\b.*\bsozinho\b"
+]
 
-            "audio": [""]
-        }
-        
-        # Converte o texto para minúsculas para facilitar a comparação
-        texto = texto.lower()
-        # Itera sobre as categorias e seus respectivos grupos de termos
-        # Se todos os termos de um grupo estiverem presentes no texto, retorna a categoria correspondente
-        for categoria, termos_grupo in categorias.items():
-            for termos in termos_grupo:
-                if all(t in texto for t in termos):
-                    return categoria
-        return "categoria_desconhecida"
-    
-    # Avalia a expressão lógica com base nas palavras-chave
-    def avaliar_expressao(self, condicao, palavras_chave):
-        palavras_texto = " ".join(palavras_chave).lower()
 
-        if "&&" in condicao:
-            return all(termo.strip() in palavras_texto for termo in condicao.split("&&"))
-        elif "||" in condicao:
-            return any(termo.strip() in palavras_texto for termo in condicao.split("||"))
-        else:
-            return condicao.strip() in palavras_texto
+PALAVRAS_SOFTWARE = [
+    r"\bfalta\b.*\bDLL\b",
+    r"\bmissing DLL\b",
+    r"\bprograma\b.*\btravando\b",
+    r"\bprograma\b.*\bdevagar\b",
+    r"\bprograma\b.*\blento\b",
+    r"\bprograma\b.*\bfechou\b.*(sozinho|do nada)",
+    r"\bsistema\b.*\blento\b",
+    r"\bcomputador\b.*\bdevagar\b",
+    r"\bm[áa]quina\b.*\btravando\b",
+    r"\bdesempenho\b.*\bbaixo\b",
+    r"\bcomputador\b.*\barrastado\b",
+    r"\blentid[aã]o\b.*\bsistema\b",
+    r"\b(app|aplicativo|software|programa)\b.*\b(n[aã]o abre|n[aã]o inicia|n[aã]o executa|travado ao iniciar)",
+    r"\bincompat[ií]vel\b.*\bsistema\b",
+    r"\berro de vers[aã]o\b.*\bprograma\b",
+    r"\bconflito\b.*\bentre\b.*\bprogramas\b"
+]
 
-    # Pergunta ao usuário sobre a categoria do problema como um metodo de segunda verificação
-    # para garantir um melhor entendimento do problema e diagnóstico da maquina    
-    def perguntar_categoria(self, categoria, palavras_chave):
-            perguntas = {
-            "inicialização": [
-                ("não liga && cheiro de queimado", "O computador emite algum som ao tentar ligar?"),
-                ("tela azul", "Você viu alguma mensagem de erro na tela azul?"),
-                ("não dá vídeo", "A tela está totalmente preta ou com mensagem de erro?"),
-                ("default", "A luz da fonte ou LED frontal acende?")
-            ],
-            "superaquecimento": [
-                ("superaquecimento || esquentando", "O computador está muito quente ao toque?"),
-                ("barulhos estranhos || barulhento", "Você escutou algum ruído incomum vindo do gabinete?"),
-                ("default", "Ele desliga sozinho após algum tempo?")
-            ],
-            "periféricos": [
-                ("mouse", "O mouse funciona em outra porta USB?"),
-                ("teclado", "O teclado está respondendo em outro computador?"),
-                ("default", "O driver do dispositivo está atualizado?")
-            ],
-            "categoria_desconhecida": [
-                ("default", "Poderia descrever melhor o problema?")
-            ]
-            }
-            
-            # Perguntas padrão para cada categoria
-            perguntas_categoria = perguntas.get(categoria, [("default", "Descreva melhor o seu problema.")])
-            feitas = set()
 
-            # Itera sobre as perguntas da categoria e verifica se a condição é atendida
-            # Se a condição for atendida e a pergunta ainda não foi feita, imprime a pergunta
-            # Se não houver perguntas feitas, imprime a pergunta padrão
-            for condicao, pergunta in perguntas_categoria:
-                if condicao == "default":
-                    continue
-                if self.avaliar_expressao(condicao, palavras_chave) and pergunta not in feitas:
-                    print(f"❓ {pergunta}")
-                    feitas.add(pergunta)
-                if not feitas:
-                    for chave, pergunta in perguntas_categoria:
-                        if chave == "default":
-                            print(f"❓ {pergunta}")
+PALAVRAS_REDE = [
+    r"\bsem internet\b",
+    r"\bdesconectado da rede\b",
+    r"\bsem conex[aã]o\b",
+    r"\bn[aã]o conecta\b",
+    r"\binternet caiu\b",
+    r"\brede nao identificada\b",
+    r"\brede desconhecida\b",
+    r"\brede n[aã]o aparece\b",
+    r"\berro de rede\b",
+    r"\binternet\b.*\blenta\b",
+    r"\bconex[aã]o fraca\b",
+    r"\binternet devagar\b",
+    r"\bnavega[cç][aã]o lenta\b",
+    r"\bconflito de IP\b",
+    r"\bIP duplicado\b",
+    r"\bproblema de IP\b",
+    r"\bconflito de endere[cç]o\b",
+    r"\bDNS nao responde\b",
+    r"\berro de DNS\b",
+    r"\bDNS indispon[ií]vel\b",
+    r"\bfalha ao resolver nomes\b",
+    r"\bproblemas no roteador ou modem\b",
+    r"\broteador n[aã]o funciona\b",
+    r"\bmodem\b.*\bcom defeito\b",
+    r"\bluz vermelha no roteador\b"
+]
 
-    # Avalia a resposta do usuário e decide o que fazer a seguir
-    # Se a resposta for positiva, finaliza o atendimento e sugere iniciar outro
-    # Se a resposta for negativa, tenta uma nova solução ate o limite de tentativas
-    # Se o limite for atingido, recomenda procurar assistência técnica
-    def avaliar_resposta_usuario(self, resposta, fila, tentativas):
-        positivas = {"funcionou", "ajudou", "corretamente", "satisfeito"}
-        negativas = {"não funcionou", "insatisfeito", "erro persiste", "ainda está dando erro"}
+PALAVRAS_ARMAZENAMENTO = [
+    r"\bHD ou SSD nao reconhece\b",
+    r"\bdisco n[aã]o detectado\b",
+    r"\bhd desapareceu\b",
+    r"\barmazenamento n[aã]o reconhecido\b",
+    r"\bssd sumiu\b",
+    r"\bespa[cç]o insuficiente no disco\b",
+    r"\bsem espa[cç]o no hd\b",
+    r"\bdisco cheio\b",
+    r"\barmazenamento lotado\b",
+    r"\bsistema travando ao acessar arquivos\b",
+    r"\btrava ao abrir pasta\b",
+    r"\bn[aã]o abre arquivos\b",
+    r"\bcongelamento ao acessar dados\b",
+    r"\barquivos\b.*\bcorrompidos\b",
+    r"\barquivos\b.*\bdanificados\b",
+    r"\berro ao abrir arquivos\b",
+    r"\barquivos com problema\b",
+    r"\bdemora para copiar\/mover arquivos\b",
+    r"\bcopiar arquivo demora\b",
+    r"\bmover arquivos muito lento\b",
+    r"\bdemora ao transferir dados\b"
+]
 
-        if resposta.lower() in positivas:
-            self.ultima_resposta = "✅ Problema resolvido! Deseja iniciar outro atendimento?"
-            return "finalizado"
-        elif resposta.lower() in negativas:
-            tentativas += 1
-            if tentativas < len(fila):
-                self.ultima_resposta = f"🔁 Tentando nova solução: {fila[tentativas]}"
-                return "continuar", tentativas
-            else:
-                self.ultima_resposta = "❌ Recomendamos procurar uma assistência técnica especializada. Deseja iniciar outro atendimento?"
-                return "finalizado"
-        else:
-            self.ultima_resposta = "❓ Não entendi sua resposta. Pode repetir?"
-            return "aguardando_resposta"
-    
-    # Regra para detectar a categoria do problema
-    # e fazer perguntas adicionais para entender melhor o problema
-    @Rule(Problema(texto=MATCH.texto))
-    def detectar_categoria(self, texto):
-        categoria = self.classificar_categoria(texto)
-        self.perguntar_categoria(categoria, texto.split())
-        print(f"🔍 Categoria identificada: {categoria.upper()}\n")
-        self.declare(Diagnostico(categoria=categoria, respostaUsuario='', tentativas=0))
-        self.ultima_categoria = categoria
+PALAVRAS_DISPOSITIVOS = [
+    r"\bteclado ou mouse n[aã]o respondem\b",
+    r"\bmouse n[aã]o funciona\b",
+    r"\bteclado n[aã]o funciona\b",
+    r"\bn[aã]o consigo clicar\b",
+    r"\busb n[aã]o funciona\b",
+    r"\bconecto e n[aã]o funciona\b",
+    r"\bdriver ausente ou desatualizados\b",
+    r"\bdriver n[aã]o instalado\b",
+    r"\bdriver\b.*\bfaltando\b",
+    r"\bdriver antigo\b",
+    r"\bdrivers desatualizados\b",
+    r"\bimpressora nao imprime\b",
+    r"\bn[aã]o sai impress[aã]o\b",
+    r"\berro na impressora\b",
+    r"\bimpressora sem resposta\b",
+    r"\bscanner nao e reconhecido\b",
+    r"\bscanner n[aã]o aparece\b",
+    r"\bscanner n[aã]o detectado\b",
+    r"\berro no scanner\b",
+    r"\bwebcam nao funciona\b",
+    r"\bc[aâ]mera sem imagem\b",
+    r"\bwebcam desligada\b",
+    r"\bjoystick ou controle nao funciona\b",
+    r"\bcontrole\b.*\bsem resposta\b",
+    r"\bjoystick n[aã]o detectado\b",
+    r"\bcontrole n[aã]o reconhecido\b"
+]
 
-    
-    # Regra para diagnosticar o problema com base na categoria e resposta do usuário
-    @Rule(Diagnostico(categoria=MATCH.cat, resposta_usuario=MATCH.resp, tentativas=MATCH.tent))
-    def diagnosticar(self, cat, resp, tent):
-        fila_diagnosticos = {
-            "inicialização": ["Verifique a fonte de alimentação", "Teste com outro cabo de energia", "Reset da BIOS"],
-            "superaquecimento": ["Limpeza das ventoinhas", "Troca da pasta térmica", "Verificação da fonte de energia"],
-            "periféricos": ["Atualizar drivers", "Testar em outra porta", "Testar em outro PC"],
-            "armazenamento": ["Verifique o cabo de dados", "Utilize um software de recuperação de arquivos", "Teste outro HD"],
-            "rede": ["Reinicie o modem", "Execute o solucionador de problemas de rede", "Atualize o driver de rede"],
-            "seguranca/malware": ["Execute uma verificação completa com antivírus", "Remova programas desconhecidos", "Restaure o sistema"]
-        }
-        fila = fila_diagnosticos.get(cat, ["Sem diagnóstico disponível."])
-        resultado = self.avaliar_resposta_usuario(resp, fila, tent)
-        # Se o resultado for "continuar", modifica o fato com a próxima tentativa
-        # Se o resultado for "finalizado", encerra o atendimento
-        if isinstance(resultado, tuple) and resultado[0] == "continuar":
-            self.modify(self.facts[fact_id], tentativas=resultado[1])
-        elif resultado == "finalizado":
-            self.halt()
-
+PALAVRAS_AUDIO = [
+    r"\bsem som\b",
+    r"\bplaca de som nao reconhecida\b",
+    r"\bcomputador\b.*\bmudo\b",
+    r"\bsem [aá]udio\b",
+    r"\b[aá]udio n[aã]o funciona\b",
+    r"\bsom n[aã]o sai\b",
+    r"\bfone de ouvido\/caixa de som nao reconhecidos\b",
+    r"\bfone n[aã]o detectado\b",
+    r"\bcaixa de som n[aã]o funciona\b",
+    r"\b[aá]udio externo n[aã]o reconhecido\b",
+    r"\bsem\b.*\bsom\b",
+    r"\bn[aã]o sai\b.*\bsom\b",
+    r"\bproblema\b.*\b[aá]udio\b",
+    r"\bdriver\b.*\bsom\b.*\berro\b",
+    r"\bfone\b.*\bn[aã]o funciona\b"
+]
